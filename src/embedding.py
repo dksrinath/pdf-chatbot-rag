@@ -1,7 +1,6 @@
 from typing import List, Dict, Any
 import numpy as np
 from langchain_community.embeddings import SentenceTransformerEmbeddings
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.schema import Document
 from src.config import Config
@@ -12,9 +11,9 @@ class EmbeddingManager:
     Uses SentenceTransformerEmbeddings for embeddings and FAISS for vector storage.
     """
     def __init__(self):
-        # Initialize the embedding model using LangChain's HuggingFaceEmbeddings
-        self.embedding_model = HuggingFaceEmbeddings(
-            model_name=Config.EMBEDDING_MODEL
+        self.embedding_model = SentenceTransformerEmbeddings(
+            model_name=Config.EMBEDDING_MODEL,
+            model_kwargs={"device": "cpu"}
         )
         self.vectorstore = None
         self.retriever = None
