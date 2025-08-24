@@ -76,6 +76,9 @@ class EmbeddingManager:
             documents: List of LangChain Document objects
         """
         try:
+            if not documents:
+                print("No documents provided to create_embeddings(). Skipping.")
+                return False
             # Ensure embedding model is ready (lazy init)
             self._init_embedding_model()
             # Create FAISS index from documents using LangChain

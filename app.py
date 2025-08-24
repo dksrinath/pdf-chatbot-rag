@@ -4,6 +4,7 @@ from src.processor import PDFProcessor
 from src.embedding import EmbeddingManager
 from src.chat import ChatManager
 from src.config import Config
+import json
 from langchain.schema import Document
 
 st.set_page_config(page_title="RAG Chatbot", page_icon="🤖", layout="wide")
@@ -56,7 +57,11 @@ def process_documents(uploaded_files):
                 
             # Store processed documents in session state
             st.session_state.documents = all_documents
-            
+
+            if not all_documents:
+                st.warning("No text chunks were extracted from the uploaded PDFs. Check OCR/Tesseract installation for scanned PDFs.")
+                return False
+
             # Create embeddings for the documents
             success = st.session_state.embedding_manager.create_embeddings(all_documents)
             
@@ -146,8 +151,80 @@ def main():
                     relevant_docs = st.session_state.embedding_manager.search(query)
                     response = st.session_state.chat_manager.generate_response(query, relevant_docs)
                 
-                st.write(response)
-                st.session_state.messages.append({"role": "assistant", "content": response})
+                # result may be either a string (legacy), a JSON string, or a dict {answer, sources}
+                answer = ""
+                sources = []
+
+                # If result is a string that encodes JSON, try to parse it
+                if isinstance(response, str):
+                    try:
+                        parsed = json.loads(response)
+                        if isinstance(parsed, dict) and ("answer" in parsed or "sources" in parsed):
+                            response = parsed
+                    except Exception:
+                        # not JSON, keep as plain string
+                        pass
+
+                if isinstance(response, dict):
+                    answer = response.get("answer", "")
+                    sources = response.get("sources", []) or []
+                else:
+                    answer = str(response)
+
+                st.write(answer)
+                st.session_state.messages.append({"role": "assistant", "content": answer})
+
+                unique = {}
+                for src in sources:
+                    if not isinstance(src, dict):
+                        continue
+                    md = src.get("metadata", {}) or {}
+                    key = (md.get("source"), md.get("page"), md.get("chunk_id"))
+                    snippet = src.get("text")
+                    if key in unique:
+                        if snippet and snippet not in unique[key]["snippets"]:
+                            unique[key]["snippets"].append(snippet)
+                    else:
+                        unique[key] = {"metadata": md, "snippets": [snippet] if snippet else []}
+
+                for i, ((source_name, page, chunk_id), entry) in enumerate(unique.items()):
+                    md = entry["metadata"]
+                    snippets = entry["snippets"]
+                    page_image_b64 = md.get("page_image")
+                    bboxes = md.get("bboxes", []) or []
+                    img_w = md.get("page_image_width")
+                    img_h = md.get("page_image_height")
+
+                    header = f"Source {i+1}: {source_name or 'unknown'} (page {page or '?'})"
+                    with st.expander(header, expanded=False):
+                        if snippets:
+                            for s in snippets:
+                                st.markdown(f"- {s}")
+
+                        if page_image_b64 and img_w and img_h:
+                            boxes_html = ""
+                            for bbox in bboxes:
+                                try:
+                                    x0, y0, x1, y1 = bbox
+                                    left = (x0 / img_w) * 100 if img_w else 0
+                                    top = (y0 / img_h) * 100 if img_h else 0
+                                    width = ((x1 - x0) / img_w) * 100 if img_w else 0
+                                    height = ((y1 - y0) / img_h) * 100 if img_h else 0
+                                    boxes_html += f"<div style='position:absolute;left:{left}%;top:{top}%;width:{width}%;height:{height}%;border:3px solid rgba(255,0,0,0.8);box-sizing:border-box;'></div>"
+                                except Exception:
+                                    continue
+
+                            html = f"""
+                            <div style='position:relative;display:inline-block;border:1px solid #eee'>
+                              <img src='data:image/png;base64,{page_image_b64}' style='max-width:600px;height:auto;display:block' />
+                              <div style='position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;'>
+                                {boxes_html}
+                              </div>
+                            </div>
+                            """
+                            st.components.v1.html(html, height=450)
+                        else:
+                            st.markdown(f"**Metadata:** {md}")
 
 if __name__ == "__main__":
     main()

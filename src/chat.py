@@ -95,7 +95,7 @@ class ChatManager:
         
         return self.chain
     
-    def generate_response(self, query: str, context_docs: List[Document]) -> str:
+    def generate_response(self, query: str, context_docs: List[Document]):
         """
         Generate a response based on the query and retrieved context documents.
         
@@ -109,41 +109,43 @@ class ChatManager:
         # Extract text from documents
         context_texts = [doc.page_content for doc in context_docs]
         context_text = "\n".join(context_texts)
-        
+
+        # If chain isn't set up, call LLM directly
         if not self.chain:
-            # Handle direct LLM call if chain isn't set up
             try:
-                # Format messages with context
                 messages = [
                     SystemMessage(content=f"You are a helpful assistant that answers questions based on the provided context. If you cannot find the answer in the context, say so.\n\nContext:\n{context_text}"),
-                    HumanMessage(content=query)
+                    HumanMessage(content=query),
                 ]
-                
-                # Call the LLM directly
                 response = self.llm(messages)
-                return response.content
-                
+                return {"answer": response.content, "sources": []}
             except Exception as e:
                 print(f"Error generating response: {str(e)}")
-                # Implement retry logic
+                # retry a few times
                 for attempt in range(3):
                     try:
-                        time.sleep(1)  # Wait before retry
+                        time.sleep(1)
                         response = self.llm(messages)
-                        return response.content
+                        return {"answer": response.content, "sources": []}
                     except Exception as retry_e:
                         print(f"Retry {attempt+1} failed: {str(retry_e)}")
-                
-                return "I encountered an error while processing your request. Please try again later."
-        else:
-            # Use the chain if available
-            try:
-                result = self.chain.invoke({"question": query})
-                return result["answer"]
-            except Exception as e:
-                print(f"Chain error: {str(e)}")
-                # Fall back to direct LLM call
-                return self.generate_response(query, context_docs)
+                return {"answer": "I encountered an error while processing your request. Please try again later.", "sources": []}
+
+        # Use the chain when available
+        try:
+            result = self.chain.invoke({"question": query})
+            answer = result.get("answer") or result.get("output_text") or ""
+            sources = []
+            for d in result.get("source_documents", []):
+                md = getattr(d, 'metadata', {})
+                sources.append({
+                    "text": d.page_content,
+                    "metadata": md,
+                })
+            return {"answer": answer, "sources": sources}
+        except Exception as e:
+            print(f"Chain error: {str(e)}")
+            return self.generate_response(query, context_docs)
                 
     def set_retriever(self, retriever):
         """

@@ -11,9 +11,11 @@ packaging>=23.2
 huggingface-hub>=0.34.3
 langchain_community
 sentencepiece>=0.2.0
-faiss-gpu
+faiss-cpu
 PyPDF2
 langchain_google_genai
 torch
 sentence-transformers
 langchain-huggingface
+PyMuPDF
+pytesseract
