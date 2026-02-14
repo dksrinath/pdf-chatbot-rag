@@ -54,7 +54,7 @@ class ChatManager:
             time.sleep(1)
             # Retry once with default parameters
             self.llm = ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-pro",
                 google_api_key=self.api_key
             )
     
