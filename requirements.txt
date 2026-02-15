@@ -9,6 +9,7 @@ click>=8.2.1
 importlib-metadata>=6.11.0
 packaging>=23.2
 huggingface-hub>=0.34.3
+langchain
 langchain_community
 sentencepiece>=0.2.0
 faiss-cpu
