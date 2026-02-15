@@ -1,7 +1,7 @@
 import io
 from typing import List, Dict, Any, Tuple
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 from src.config import Config
 
 try:
