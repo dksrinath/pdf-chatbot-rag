@@ -1,22 +1,31 @@
 streamlit==1.47.1
+# Core LangChain packages (Required for modern imports)
+langchain
+langchain-community
+langchain-core
+langchain-text-splitters
+langchain-google-genai
+langchain-huggingface
+
+# Vector Store & Embeddings
+faiss-cpu
+sentence-transformers
+torch
+sentencepiece>=0.2.0
+
+# PDF Processing & OCR
+PyMuPDF
+PyPDF2
+pytesseract
 Pillow>=10.0.0
+
+# Utilities & Dependencies
 nltk>=3.9.1
 pandas>=2.3.1
+huggingface-hub>=0.34.3
 altair>=5.5.0
 blinker>=1.9.0
 cachetools>=5.5.2
 click>=8.2.1
 importlib-metadata>=6.11.0
 packaging>=23.2
-huggingface-hub>=0.34.3
-langchain
-langchain_community
-sentencepiece>=0.2.0
-faiss-cpu
-PyPDF2
-langchain_google_genai
-torch
-sentence-transformers
-langchain-huggingface
-PyMuPDF
-pytesseract
