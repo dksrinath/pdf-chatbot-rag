@@ -23,7 +23,7 @@ def initialize_session_state():
     if "chat_manager" not in st.session_state:
         # Check if API key is available
         if not Config.is_valid():
-            st.error("Missing API key. Please check your .env file.")
+            st.error("Missing API key. Please check your .env file or Space Secrets.")
             return False
             
         st.session_state.chat_manager = ChatManager(Config.GOOGLE_API_KEY)
@@ -39,12 +39,6 @@ def initialize_session_state():
 def process_documents(uploaded_files):
     """
     Process the uploaded PDF documents.
-    
-    Args:
-        uploaded_files: List of uploaded PDF files
-        
-    Returns:
-        bool: True if processing was successful, False otherwise
     """
     try:
         with st.spinner("Processing documents..."):
@@ -59,7 +53,7 @@ def process_documents(uploaded_files):
             st.session_state.documents = all_documents
 
             if not all_documents:
-                st.warning("No text chunks were extracted from the uploaded PDFs. Check OCR/Tesseract installation for scanned PDFs.")
+                st.warning("No text chunks were extracted. Check OCR/Tesseract installation for scanned PDFs.")
                 return False
 
             # Create embeddings for the documents
@@ -83,7 +77,6 @@ def process_documents(uploaded_files):
 def main():
     """
     Main application function.
-    Sets up the UI and handles user interactions.
     """
     # Initialize session state
     if not initialize_session_state():
@@ -112,13 +105,16 @@ def main():
             if st.button("Clear Conversation"):
                 st.session_state.messages = []
                 st.session_state.chat_manager.reset_conversation()
-                st.experimental_rerun()
+                # FIXED HERE:
+                st.rerun() 
+            
             # Add a button to clear file chunks
             if st.button("Clear File Chunks"):
                 st.session_state.documents = []
                 if hasattr(st.session_state.embedding_manager, 'clear_embeddings'):
                     st.session_state.embedding_manager.clear_embeddings()
-                st.experimental_rerun()
+                # FIXED HERE:
+                st.rerun()
     
     # Display chat history
     for message in st.session_state.messages:
@@ -151,7 +147,6 @@ def main():
                     relevant_docs = st.session_state.embedding_manager.search(query)
                     response = st.session_state.chat_manager.generate_response(query, relevant_docs)
                 
-                # result may be either a string (legacy), a JSON string, or a dict {answer, sources}
                 answer = ""
                 sources = []
 
@@ -162,7 +157,6 @@ def main():
                         if isinstance(parsed, dict) and ("answer" in parsed or "sources" in parsed):
                             response = parsed
                     except Exception:
-                        # not JSON, keep as plain string
                         pass
 
                 if isinstance(response, dict):
