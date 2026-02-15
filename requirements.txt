@@ -1,25 +1,25 @@
 streamlit==1.47.1
-# Core LangChain packages (Required for modern imports)
-langchain
-langchain-community
-langchain-core
-langchain-text-splitters
-langchain-google-genai
-langchain-huggingface
+# Pin LangChain to 0.3.x series to support legacy chains
+langchain>=0.3.0,<0.4.0
+langchain-community>=0.3.0,<0.4.0
+langchain-core>=0.3.0,<0.4.0
+langchain-text-splitters>=0.3.0,<0.4.0
+langchain-google-genai>=2.0.0,<3.0.0
+langchain-huggingface>=0.1.0,<0.2.0
 
-# Vector Store & Embeddings
+# Vector Store & AI
 faiss-cpu
 sentence-transformers
 torch
 sentencepiece>=0.2.0
 
-# PDF Processing & OCR
+# PDF & OCR
 PyMuPDF
 PyPDF2
 pytesseract
 Pillow>=10.0.0
 
-# Utilities & Dependencies
+# Utilities
 nltk>=3.9.1
 pandas>=2.3.1
 huggingface-hub>=0.34.3
@@ -29,3 +29,4 @@ cachetools>=5.5.2
 click>=8.2.1
 importlib-metadata>=6.11.0
 packaging>=23.2
+python-dotenv
