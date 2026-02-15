@@ -5,7 +5,7 @@ from src.embedding import EmbeddingManager
 from src.chat import ChatManager
 from src.config import Config
 import json
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 st.set_page_config(page_title="RAG Chatbot", page_icon="🤖", layout="wide")
 
