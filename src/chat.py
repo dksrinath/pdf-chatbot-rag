@@ -4,7 +4,6 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain_core.documents import Document
-from langchain_core.documents import Document
 from langchain_core.prompts import PromptTemplate
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from src.config import Config
@@ -117,7 +116,7 @@ class ChatManager:
                     SystemMessage(content=f"You are a helpful assistant that answers questions based on the provided context. If you cannot find the answer in the context, say so.\n\nContext:\n{context_text}"),
                     HumanMessage(content=query),
                 ]
-                response = self.llm(messages)
+                response = self.llm.invoke(messages) # Changed from self.llm(messages) to .invoke() for newer langchain versions
                 return {"answer": response.content, "sources": []}
             except Exception as e:
                 print(f"Error generating response: {str(e)}")
@@ -125,7 +124,7 @@ class ChatManager:
                 for attempt in range(3):
                     try:
                         time.sleep(1)
-                        response = self.llm(messages)
+                        response = self.llm.invoke(messages)
                         return {"answer": response.content, "sources": []}
                     except Exception as retry_e:
                         print(f"Retry {attempt+1} failed: {str(retry_e)}")
