@@ -41,7 +41,7 @@ class ChatManager:
             print(f"Error initializing LLM, retrying: {str(e)}")
             time.sleep(1)
             self.llm = ChatGoogleGenerativeAI(
-                model="gemini-2.5-pro",
+                model="gemma-3-27b-it",
                 google_api_key=self.api_key
             )
     
