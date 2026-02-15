@@ -1,7 +1,6 @@
 from typing import List, Dict, Any, Optional
 import time
 from langchain_google_genai import ChatGoogleGenerativeAI
-# FIXED: Explicit import paths to avoid namespace errors
 from langchain.chains.conversational_retrieval.base import ConversationalRetrievalChain
 from langchain.memory.buffer import ConversationBufferMemory
 from langchain_core.documents import Document
@@ -10,9 +9,6 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from src.config import Config
 
 class ChatManager:
-    """
-    Manages chat interactions using LangChain components.
-    """
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.memory = None
@@ -21,7 +17,6 @@ class ChatManager:
         self._initialize_components()
         
     def _initialize_components(self):
-        """Initialize LangChain components."""
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
             return_messages=True,
@@ -30,7 +25,7 @@ class ChatManager:
         
         try:
             self.llm = ChatGoogleGenerativeAI(
-                model=Config.MODEL_NAME,
+                model=Config.MODEL_NAME, 
                 google_api_key=self.api_key,
                 temperature=0.7,
                 max_output_tokens=2048,
@@ -41,12 +36,11 @@ class ChatManager:
             print(f"Error initializing LLM, retrying: {str(e)}")
             time.sleep(1)
             self.llm = ChatGoogleGenerativeAI(
-                model="gemma-3-27b-it",
+                model="gemma-3-27b-it", 
                 google_api_key=self.api_key
             )
     
     def _create_chain(self, retriever):
-        """Creates a conversational retrieval chain."""
         system_template = """You are a helpful assistant that answers questions based on the provided context.
         If you cannot find the answer in the context, acknowledge that and provide general information if possible.
         Always cite your sources when the information comes from the provided context.
@@ -70,47 +64,52 @@ class ChatManager:
         )
         return self.chain
     
+    def _fallback_generation(self, query: str, context_text: str):
+        """Helper to generate response without the chain if chain fails."""
+        try:
+            messages = [
+                SystemMessage(content=f"You are a helpful assistant... Context:\n{context_text}"),
+                HumanMessage(content=query),
+            ]
+            # Retry logic for the fallback itself
+            for attempt in range(2):
+                try:
+                    response = self.llm.invoke(messages)
+                    return {"answer": response.content, "sources": []}
+                except Exception:
+                    time.sleep(2)
+            return {"answer": "I am currently overloaded. Please try again in a few seconds.", "sources": []}
+        except Exception as e:
+            return {"answer": f"Error: {str(e)}", "sources": []}
+
     def generate_response(self, query: str, context_docs: List[Document]):
-        """Generate a response based on the query and retrieved context documents."""
-        # Extract text from documents for fallback
+        # Rate limit protection (Gemma 3 allows 30 RPM, so 2s is safe)
+        time.sleep(2) 
+
         context_texts = [doc.page_content for doc in context_docs]
         context_text = "\n".join(context_texts)
 
-        # If chain isn't set up, call LLM directly
-        if not self.chain:
+        # 1. Try to use the RAG Chain first
+        if self.chain:
             try:
-                messages = [
-                    SystemMessage(content=f"You are a helpful assistant that answers questions based on the provided context. If you cannot find the answer in the context, say so.\n\nContext:\n{context_text}"),
-                    HumanMessage(content=query),
-                ]
-                response = self.llm.invoke(messages)
-                return {"answer": response.content, "sources": []}
+                result = self.chain.invoke({"question": query})
+                answer = result.get("answer") or result.get("output_text") or ""
+                sources = []
+                for d in result.get("source_documents", []):
+                    md = getattr(d, 'metadata', {})
+                    sources.append({
+                        "text": d.page_content,
+                        "metadata": md,
+                    })
+                return {"answer": answer, "sources": sources}
             except Exception as e:
-                print(f"Error generating response: {str(e)}")
-                for attempt in range(3):
-                    try:
-                        time.sleep(1)
-                        response = self.llm.invoke(messages)
-                        return {"answer": response.content, "sources": []}
-                    except Exception:
-                        pass
-                return {"answer": "I encountered an error while processing your request.", "sources": []}
-
-        # Use the chain when available
-        try:
-            result = self.chain.invoke({"question": query})
-            answer = result.get("answer") or result.get("output_text") or ""
-            sources = []
-            for d in result.get("source_documents", []):
-                md = getattr(d, 'metadata', {})
-                sources.append({
-                    "text": d.page_content,
-                    "metadata": md,
-                })
-            return {"answer": answer, "sources": sources}
-        except Exception as e:
-            print(f"Chain error: {str(e)}")
-            return self.generate_response(query, context_docs)
+                print(f"Chain error: {str(e)}")
+                # DO NOT RECURSE. Fallback explicitly.
+                pass 
+        
+        # 2. Fallback to direct generation if chain missing or failed
+        print("Falling back to direct generation...")
+        return self._fallback_generation(query, context_text)
                 
     def set_retriever(self, retriever):
         self._create_chain(retriever)
