@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain.schema import Document
+from langchain_core.documents import Document
 from src.config import Config
 
 try:
