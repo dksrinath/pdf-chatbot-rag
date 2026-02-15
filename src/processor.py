@@ -1,6 +1,6 @@
 import io
 from typing import List, Dict, Any, Tuple
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 from src.config import Config
 
