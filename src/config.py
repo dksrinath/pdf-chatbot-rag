@@ -18,7 +18,7 @@ class Config:
     CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
     
     # Model settings
-    MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-pro")
+    MODEL_NAME = os.getenv("MODEL_NAME", "gemma-3-27b-it")
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     
     # Retrieval settings
@@ -52,5 +52,4 @@ class Config:
         Returns:
             bool: True if configuration is valid, False otherwise
         """
-
         return bool(cls.GOOGLE_API_KEY)

@@ -1,26 +1,15 @@
 from typing import List, Dict, Any, Optional
 import time
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
-from langchain.schema import Document
-from langchain.prompts import PromptTemplate
-from langchain.chains.llm import LLMChain
-from langchain.schema.messages import SystemMessage, HumanMessage, AIMessage
+from langchain.chains.conversational_retrieval.base import ConversationalRetrievalChain
+from langchain.memory.buffer import ConversationBufferMemory
+from langchain_core.documents import Document
+from langchain_core.prompts import PromptTemplate
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from src.config import Config
 
 class ChatManager:
-    """
-    Manages chat interactions using LangChain components.
-    Uses LangChain's ConversationalRetrievalChain for handling conversational RAG.
-    """
     def __init__(self, api_key: str):
-        """
-        Initialize the ChatManager with the specified API key.
-        
-        Args:
-            api_key: The API key for the LLM service
-        """
         self.api_key = api_key
         self.memory = None
         self.chain = None
@@ -28,21 +17,15 @@ class ChatManager:
         self._initialize_components()
         
     def _initialize_components(self):
-        """
-        Initialize LangChain components for the chat system.
-        Sets up the LLM, memory, and creates the conversation chain.
-        """
-        # Initialize conversation memory
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
             return_messages=True,
             output_key="answer"
         )
         
-        # Initialize the LLM with retry logic
         try:
             self.llm = ChatGoogleGenerativeAI(
-                model=Config.MODEL_NAME,
+                model=Config.MODEL_NAME, 
                 google_api_key=self.api_key,
                 temperature=0.7,
                 max_output_tokens=2048,
@@ -52,23 +35,12 @@ class ChatManager:
         except Exception as e:
             print(f"Error initializing LLM, retrying: {str(e)}")
             time.sleep(1)
-            # Retry once with default parameters
             self.llm = ChatGoogleGenerativeAI(
-                model="gemini-2.5-pro",
+                model="gemma-3-27b-it", 
                 google_api_key=self.api_key
             )
     
     def _create_chain(self, retriever):
-        """
-        Creates a conversational retrieval chain with the specified retriever.
-        
-        Args:
-            retriever: The document retriever to use
-            
-        Returns:
-            The created conversation chain
-        """
-        # System prompt template
         system_template = """You are a helpful assistant that answers questions based on the provided context.
         If you cannot find the answer in the context, acknowledge that and provide general information if possible.
         Always cite your sources when the information comes from the provided context.
@@ -77,13 +49,11 @@ class ChatManager:
         {context}
         """
         
-        # Create prompt templates
         qa_prompt = PromptTemplate(
             input_variables=["context", "question"],
             template=system_template + "\nQuestion: {question}"
         )
         
-        # Create the chain
         self.chain = ConversationalRetrievalChain.from_llm(
             llm=self.llm,
             retriever=retriever,
@@ -92,83 +62,63 @@ class ChatManager:
             combine_docs_chain_kwargs={"prompt": qa_prompt},
             verbose=False
         )
-        
         return self.chain
     
-    def generate_response(self, query: str, context_docs: List[Document]) -> str:
-        """
-        Generate a response based on the query and retrieved context documents.
-        
-        Args:
-            query: The user's question
-            context_docs: List of context documents retrieved for the query
-            
-        Returns:
-            str: The generated response
-        """
-        # Extract text from documents
+    def _fallback_generation(self, query: str, context_text: str):
+        """Helper to generate response without the chain if chain fails."""
+        try:
+            messages = [
+                SystemMessage(content=f"You are a helpful assistant... Context:\n{context_text}"),
+                HumanMessage(content=query),
+            ]
+            # Retry logic for the fallback itself
+            for attempt in range(2):
+                try:
+                    response = self.llm.invoke(messages)
+                    return {"answer": response.content, "sources": []}
+                except Exception:
+                    time.sleep(2)
+            return {"answer": "I am currently overloaded. Please try again in a few seconds.", "sources": []}
+        except Exception as e:
+            return {"answer": f"Error: {str(e)}", "sources": []}
+
+    def generate_response(self, query: str, context_docs: List[Document]):
+        # Rate limit protection (Gemma 3 allows 30 RPM, so 2s is safe)
+        time.sleep(2) 
+
         context_texts = [doc.page_content for doc in context_docs]
         context_text = "\n".join(context_texts)
-        
-        if not self.chain:
-            # Handle direct LLM call if chain isn't set up
-            try:
-                # Format messages with context
-                messages = [
-                    SystemMessage(content=f"You are a helpful assistant that answers questions based on the provided context. If you cannot find the answer in the context, say so.\n\nContext:\n{context_text}"),
-                    HumanMessage(content=query)
-                ]
-                
-                # Call the LLM directly
-                response = self.llm(messages)
-                return response.content
-                
-            except Exception as e:
-                print(f"Error generating response: {str(e)}")
-                # Implement retry logic
-                for attempt in range(3):
-                    try:
-                        time.sleep(1)  # Wait before retry
-                        response = self.llm(messages)
-                        return response.content
-                    except Exception as retry_e:
-                        print(f"Retry {attempt+1} failed: {str(retry_e)}")
-                
-                return "I encountered an error while processing your request. Please try again later."
-        else:
-            # Use the chain if available
+
+        # 1. Try to use the RAG Chain first
+        if self.chain:
             try:
                 result = self.chain.invoke({"question": query})
-                return result["answer"]
+                answer = result.get("answer") or result.get("output_text") or ""
+                sources = []
+                for d in result.get("source_documents", []):
+                    md = getattr(d, 'metadata', {})
+                    sources.append({
+                        "text": d.page_content,
+                        "metadata": md,
+                    })
+                return {"answer": answer, "sources": sources}
             except Exception as e:
                 print(f"Chain error: {str(e)}")
-                # Fall back to direct LLM call
-                return self.generate_response(query, context_docs)
+                # DO NOT RECURSE. Fallback explicitly.
+                pass 
+        
+        # 2. Fallback to direct generation if chain missing or failed
+        print("Falling back to direct generation...")
+        return self._fallback_generation(query, context_text)
                 
     def set_retriever(self, retriever):
-        """
-        Set the retriever and create a conversation chain.
-        
-        Args:
-            retriever: The document retriever to use
-        """
         self._create_chain(retriever)
         
     def reset_conversation(self):
-        """
-        Reset the conversation history.
-        """
         if self.memory:
             self.memory.clear()
             
     def get_conversation_history(self):
-        """
-        Get the current conversation history.
-        
-        Returns:
-            The conversation history
-        """
         if self.memory:
             return self.memory.chat_memory.messages
-
         return []
